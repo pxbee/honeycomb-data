@@ -11,7 +11,7 @@ const { generateContractFunctionList, convertToNumber } = require('./../utils');
 
 module.exports = {
     //fetches prices of xdai token ids from coingecko
-    async tokenPrices({token_ids = undefined} = {}) {
+    async coingeckoTokenPrices({token_ids = undefined} = {}) {
         const params = new URLSearchParams({
             vs_currencies: 'usd',
             contract_addresses: token_ids
@@ -42,33 +42,92 @@ module.exports = {
     //gets a list of all non zero token balances in an wallet address
     async tokenBalances({user_address = undefined} = {}) {
         if (!user_address) {
-            throw new Error("honeycomb-data: User address undefined");
+            throw new Error("tulip-data: User address undefined");
         }
 
         const tokens = await module.exports.tokens();
-
         const batch = generateContractFunctionList({ tokens, user_address: user_address });
         // query block number
         // const batch = generateContractFunctionList({ tokens, blockNumber: 11633038 });
 
+        //get data from honeyswap
+        const properties = [
+            'id',
+            'symbol',
+            'derivedETH'
+        ];
+
+        //TODO: only fetch needed data
+        /*
+        const result = await request(graphAPIEndpoints.honeyswap_v2,
+            gql`{
+                    tokens(where: {id_in: ["${tokens[0].address.toLowerCase()}","${tokens[1].address.toLowerCase()}" ]}) {
+                      id,
+                      symbol,
+                      derivedETH
+                    }
+                }`
+        );
+         */
+
+        //proper encoding of _in query
+        const id_query = '\['+
+            '\\"'+tokens[0].address.toLowerCase()+'\\"' + ',' +
+            '\\"'+tokens[1].address.toLowerCase()+'\\"'
+            +'\]';
+
+        const tokenData =  await pageResults({
+            api: graphAPIEndpoints.honeyswap_v2,
+            query: {
+                entity: 'tokens',
+                selection: {
+                    where: {
+                        //id_in: [`\\"${tokens[0].address.toLowerCase()}\\"`, `\\"${tokens[0].address.toLowerCase()}\\"`]
+                        //id_in: id_query
+                        //id_in: `\\[\\"${tokens[0].address.toLowerCase()}\\", \\"${tokens[1].address.toLowerCase()}\\"\\]`
+
+                    },
+                    block: undefined,//block ? { number: block } : timestamp ? { number: await timestampToBlock(timestamp) } : undefined,
+                },
+                properties: properties
+            }
+        })
+            .then(results => {return results})
+            .catch(err => console.log(err));
+
+
+        const tokensById = {};
+        tokenData.forEach(entry => {
+            tokensById[entry.id.toLowerCase()] = {
+                id: entry.id.toLowerCase(),
+                ...entry
+            };
+        });
+
+        //console.log(tokensById);
+
         const results = [];
         const { response } = await batch.execute();
-
         let tokenIds = [];
 
         response.forEach(({ _hex }, index) => {
-            const { name, decimals, symbol } = tokens[index];
+            //const { name, decimals, symbol } = tokens[index];
+            const { address, decimals } = tokens[index];
             if(_hex !== '0x00') {
+                const balance = `${convertToNumber(_hex, decimals)}`;
+                const token = tokensById[address.toLowerCase()];
+
                 results.push({
-                    balance: `${convertToNumber(_hex, decimals)}`,
+                    balance: balance,
+                    priceUSD: token.derivedETH,
+                    valueUSD: token.derivedETH * balance,
                     ...tokens[index]
                 })
-                //collect all non zero value token addresses
-                tokenIds.push(tokens[index].address);
             }
         });
 
         //get prices for the tokens on coingecko and add the values to the result
+        /*
         const prices = await module.exports.tokenPrices({token_ids: tokenIds});
         results.forEach( token => {
             const price = prices[token.address];
@@ -77,13 +136,15 @@ module.exports = {
                 //token.currency = 'usd';
                 token.valueUSD = token.balance * price.usd;
             }
-        });
+        });*/
+
+
 
         return tokenBalances.callback(results);
     },
     //TODO: add more exchanges/only works with honeyswap subgraph and tokenlist for now
     async poolBalances({block = undefined, timestamp = undefined, user_address = undefined} = {}) {
-        if(!user_address) { throw new Error("sushi-data: User address undefined"); }
+        if(!user_address) { throw new Error("tulip-data: User address undefined"); }
 
         const properties = [
             'id',
