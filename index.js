@@ -1,5 +1,5 @@
-const wallet = require('./queries/wallet');
+const walletData = require('./queries/wallet');
 
 module.exports = {
-	wallet
+	walletData
 };
