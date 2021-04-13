@@ -2,274 +2,263 @@ const fetch = require('node-fetch');
 
 const pageResults = require('graph-results-pager');
 
-const { request, gql } = require('graphql-request');
+const {request, gql} = require('graphql-request');
 
 
-const { ERC20Abi, coingeckoAPIEndpoints, graphAPIEndpoints, tokenLists, rpcEndpoints } = require('./../constants');
+const {coingeckoAPIEndpoints, graphAPIEndpoints, tokenLists, rpcEndpoints} = require('./../constants');
 
-const { generateContractFunctionList, convertToNumber } = require('./../utils');
+const Multicall = require('@makerdao/multicall');
 
 module.exports = {
-    //fetches prices of xdai token ids from coingecko
-    async coingeckoTokenPrices({token_ids = undefined} = {}) {
-        const params = new URLSearchParams({
-            vs_currencies: 'usd',
-            contract_addresses: token_ids
-        });
+	//fetches the honeyswap token list
+	async tokens() {
+		let data = await fetch(tokenLists.honeyswap, {
+			methods: 'GET',
+			headers: {'Content-Type': 'application/json',}
+		}).then(response => {
+			return response.json();
+		});
 
-        let data = await fetch(coingeckoAPIEndpoints.prices + params, {
-            method: 'GET',
-            headers: {'Content-Type': 'application/json',},
-        }).then(response => {
-            return response.json();
-        });
+		return data.tokens;
+	},
 
-        return data;
-    },
+	//gets a list of all non zero token balances in an wallet address
+	async tokenBalances({user_address = undefined} = {}) {
+		if (!user_address) {
+			throw new Error('tulip-data: User address undefined');
+		}
 
-    //fetches the honeyswap token list
-    async tokens() {
-        let data = await fetch(tokenLists.honeyswap, {
-            methods: 'GET',
-            headers: {'Content-Type': 'application/json',}
-        }).then(response => {
-            return response.json();
-        });
-
-        return data.tokens;
-    },
-
-    //gets a list of all non zero token balances in an wallet address
-    async tokenBalances({user_address = undefined} = {}) {
-        if (!user_address) {
-            throw new Error("tulip-data: User address undefined");
-        }
-
-        const tokens = await module.exports.tokens();
-        const batch = generateContractFunctionList({ tokens, user_address: user_address });
-        // query block number
-        // const batch = generateContractFunctionList({ tokens, blockNumber: 11633038 });
-
-        //get data from honeyswap
-        const properties = [
-            'id',
-            'symbol',
-            'derivedETH'
-        ];
-
-        //TODO: only fetch needed data
-        /*
-        const result = await request(graphAPIEndpoints.honeyswap_v2,
-            gql`{
-                    tokens(where: {id_in: ["${tokens[0].address.toLowerCase()}","${tokens[1].address.toLowerCase()}" ]}) {
-                      id,
-                      symbol,
-                      derivedETH
-                    }
-                }`
-        );
-         */
-
-        //proper encoding of _in query
-        const id_query = '\['+
-            '\\"'+tokens[0].address.toLowerCase()+'\\"' + ',' +
-            '\\"'+tokens[1].address.toLowerCase()+'\\"'
-            +'\]';
-
-        const tokenData =  await pageResults({
-            api: graphAPIEndpoints.honeyswap_v2,
-            query: {
-                entity: 'tokens',
-                selection: {
-                    where: {
-                        //id_in: [`\\"${tokens[0].address.toLowerCase()}\\"`, `\\"${tokens[0].address.toLowerCase()}\\"`]
-                        //id_in: id_query
-                        //id_in: `\\[\\"${tokens[0].address.toLowerCase()}\\", \\"${tokens[1].address.toLowerCase()}\\"\\]`
-
-                    },
-                    block: undefined,//block ? { number: block } : timestamp ? { number: await timestampToBlock(timestamp) } : undefined,
-                },
-                properties: properties
-            }
-        })
-            .then(results => {return results})
-            .catch(err => console.log(err));
+		const tokens = await module.exports.tokens();
+		const multicallQuery = [];
 
 
-        const tokensById = {};
-        tokenData.forEach(entry => {
-            tokensById[entry.id.toLowerCase()] = {
-                id: entry.id.toLowerCase(),
-                ...entry
-            };
-        });
+		tokens.forEach(token => {
+			multicallQuery.push(
+				{
+					target: token.address,
+					call: ['balanceOf(address)(uint256)', user_address],
+					returns: [[token.address, val => val / 10 ** token.decimals]]
+				}
+			);
+		});
 
-        //console.log(tokensById);
+		const config = {
+			rpcUrl: rpcEndpoints.xdai,
+			multicallAddress: '0xb5b692a88BDFc81ca69dcB1d924f59f0413A602a'
+		};
+		//const config = { preset: 'xdai' };
+		const nonzeroBalances = {};
+		let gqlIdQuery = '';
 
-        const results = [];
-        const { response } = await batch.execute();
-        let tokenIds = [];
+		await Multicall.aggregate(
+			multicallQuery,
+			config
+		).then( resultObject => {
+			const gqlIds = [];
 
-        response.forEach(({ _hex }, index) => {
-            //const { name, decimals, symbol } = tokens[index];
-            const { address, decimals } = tokens[index];
-            if(_hex !== '0x00') {
-                const balance = `${convertToNumber(_hex, decimals)}`;
-                const token = tokensById[address.toLowerCase()];
+			Object.entries(resultObject.results.transformed)
+			.forEach(([key, value]) => {
+				if(value !== 0) {
+					nonzeroBalances[key] = value;
+					gqlIds.push( '\\"'+key+'\\"');
+				}
+			})
 
-                results.push({
-                    balance: balance,
-                    priceUSD: token.derivedETH,
-                    valueUSD: token.derivedETH * balance,
-                    ...tokens[index]
-                })
-            }
-        });
+			gqlIdQuery = '\['+ gqlIds.join(',') +'\]';
+		});
 
-        //get prices for the tokens on coingecko and add the values to the result
-        /*
-        const prices = await module.exports.tokenPrices({token_ids: tokenIds});
-        results.forEach( token => {
-            const price = prices[token.address];
-            if(price) {
-                token.priceUSD = price.usd;
-                //token.currency = 'usd';
-                token.valueUSD = token.balance * price.usd;
-            }
-        });*/
+		//get data from honeyswap
+		//TODO: only fetch needed data
+
+		//get data from honeyswap
+		const properties = [
+			'id',
+			'symbol',
+			'derivedETH'
+		];
+
+		const tokenData =  await pageResults({
+			api: graphAPIEndpoints.honeyswap_v2,
+			query: {
+				entity: 'tokens',
+				selection: {
+					where: {
+						id_in: gqlIdQuery
+					},
+					block: undefined,
+				},
+				properties: properties
+			}
+		})
+			.then(results => {return results})
+			.catch(err => console.log(err));
 
 
+		const tokensById = {};
+		tokens.forEach(entry => {
+			tokensById[entry.address.toLowerCase()] = {
+				address: entry.address.toLowerCase(),
+				...entry
+			};
+		});
 
-        return tokenBalances.callback(results);
-    },
-    //TODO: add more exchanges/only works with honeyswap subgraph and tokenlist for now
-    async poolBalances({block = undefined, timestamp = undefined, user_address = undefined} = {}) {
-        if(!user_address) { throw new Error("tulip-data: User address undefined"); }
+		const results = [];
+		tokenData.forEach(token => {
 
-        const properties = [
-            'id',
-            'liquidityPositions { liquidityTokenBalance, pair { token0 { id, derivedETH }, token1 { id, derivedETH }, reserve0, reserve1, reserveUSD, totalSupply} }'
-        ];
+			results.push({
+				balance: nonzeroBalances[token.id],
+				priceUSD: token.derivedETH,
+				valueUSD: token.derivedETH * nonzeroBalances[token.id],
+				...tokensById[token.id]
+			});
+		});
 
-        const poolData =  await pageResults({
-            api: graphAPIEndpoints.honeyswap_v2,
-            query: {
-                entity: 'users',
-                selection: {
-                    where: {
-                        id: `\\"${user_address.toLowerCase()}\\"`
-                    },
-                    block: block ? { number: block } : timestamp ? { number: await timestampToBlock(timestamp) } : undefined,
-                },
-                properties: properties
-            }
-        })
-        .then(results => {return results})
-        .catch(err => console.log(err));
+		return tokenBalances.callback(results);
+	},
+	//TODO: add more exchanges/only works with honeyswap subgraph and tokenlist for now
+	async poolBalances({block = undefined, timestamp = undefined, user_address = undefined} = {}) {
+		if (!user_address) {
+			throw new Error('tulip-data: User address undefined');
+		}
 
-        const tokens = await module.exports.tokens();
-        let  tokensById= [];
-        tokens.forEach(token => {
-            tokensById[token.address.toLowerCase()] = token;
-        });
+		const properties = [
+			'id',
+			'liquidityPositions { liquidityTokenBalance, pair { token0 { id, symbol, name, derivedETH }, token1 { id, symbol, name, derivedETH }, reserve0, reserve1, reserveUSD, totalSupply} }'
+		];
 
-        let results = [];
-        if(poolData && poolData[0] && poolData[0].liquidityPositions) {
-            const pairs = poolData[0].liquidityPositions.forEach(position => {
+		const poolData = await pageResults({
+			api: graphAPIEndpoints.honeyswap_v2,
+			query: {
+				entity: 'users',
+				selection: {
+					where: {
+						id: `\\"${user_address.toLowerCase()}\\"`
+					},
+					block: block ? {number: block} : timestamp ? {number: await timestampToBlock(timestamp)} : undefined,
+				},
+				properties: properties
+			}
+		})
+			.then(results => {
+				return results;
+			})
+			.catch(err => console.log(err));
 
-                let token0 = tokensById[position.pair.token0.id];
-                if(!token0) {
-                    throw new Error("honeycomb-data: Token0 address not found:".position.pair.token0.id);
-                }
-                let token1 = tokensById[position.pair.token1.id];
-                if(!token1) {
-                    throw new Error("honeycomb-data: Token1 address not found:".position.pair.token1.id);
-                }
-                /*
-                    get liquidity value of single token
+		const tokens = await module.exports.tokens();
+		let tokensById = [];
+		tokens.forEach(token => {
+			tokensById[token.address.toLowerCase()] = token;
+		});
 
-                    getLiquidityValue()
-                    from: https://github.com/Uniswap/uniswap-v2-sdk/blob/main/src/entities/pair.ts
-                    JSBI.divide(JSBI.multiply(liquidity.raw, this.reserveOf(token).raw), totalSupplyAdjusted.raw)
+		let results = [];
+		if (poolData && poolData[0] && poolData[0].liquidityPositions) {
+			const pairs = poolData[0].liquidityPositions.forEach(position => {
 
-                    let liquidityValueUSD = position.liquidityTokenBalance * position.pair.reserve0 / position.pair.totalSupply;
-                    liquidityValueUSD = liquidityValueUSD * position.pair.token0.derivedETH * 2;
-                */
-                token0.balance = position.liquidityTokenBalance * position.pair.reserve0 / position.pair.totalSupply;
-                token1.balance = position.liquidityTokenBalance * position.pair.reserve1 / position.pair.totalSupply;
+				let token0 = tokensById[position.pair.token0.id];
+				if (!token0) {
+					token0 = {
+						name: position.pair.token0.name,
+						symbol: position.pair.token0.symbol,
+						address: position.pair.token0.id,
+						logoURI: null
+					}
+				}
+				let token1 = tokensById[position.pair.token1.id];
+				if (!token1) {
+					token1 = {
+						name: position.pair.token1.name,
+						symbol: position.pair.token1.symbol,
+						address: position.pair.token1.id,
+						logoURI: null
+					}
+				}
 
-                //in this case eth == dai == usd
-                token0.priceUSD = position.pair.token0.derivedETH;
-                token1.priceUSD = position.pair.token1.derivedETH;
 
-                token0.valueUSD = token0.balance * position.pair.token0.derivedETH;
-                token1.valueUSD = token1.balance * position.pair.token1.derivedETH;
+				/*
+					get liquidity value of single token
 
-                /* get usd value of owned pool tokens */
-                const liquidityValueUSD = position.pair.reserveUSD / position.pair.totalSupply * position.liquidityTokenBalance;
+					getLiquidityValue()
+					from: https://github.com/Uniswap/uniswap-v2-sdk/blob/main/src/entities/pair.ts
+					JSBI.divide(JSBI.multiply(liquidity.raw, this.reserveOf(token).raw), totalSupplyAdjusted.raw)
 
-                if(position.liquidityTokenBalance <= 0)
-                    return;
+					let liquidityValueUSD = position.liquidityTokenBalance * position.pair.reserve0 / position.pair.totalSupply;
+					liquidityValueUSD = liquidityValueUSD * position.pair.token0.derivedETH * 2;
+				*/
+				token0.balance = position.liquidityTokenBalance * position.pair.reserve0 / position.pair.totalSupply;
+				token1.balance = position.liquidityTokenBalance * position.pair.reserve1 / position.pair.totalSupply;
 
-                results.push({
-                    tokens: [
-                        token0,
-                        token1
-                    ],
-                    balance: position.liquidityTokenBalance,
-                    valueUSD: liquidityValueUSD
-                });
-            });
+				//in this case eth == dai == usd
+				token0.priceUSD = position.pair.token0.derivedETH;
+				token1.priceUSD = position.pair.token1.derivedETH;
 
-            return poolBalances.callback(results);
+				token0.valueUSD = token0.balance * position.pair.token0.derivedETH;
+				token1.valueUSD = token1.balance * position.pair.token1.derivedETH;
 
-        }
-    }
-}
+				/* get usd value of owned pool tokens */
+				const liquidityValueUSD = position.pair.reserveUSD / position.pair.totalSupply * position.liquidityTokenBalance;
+
+				if (position.liquidityTokenBalance <= 0)
+					return;
+
+				results.push({
+					tokens: [
+						token0,
+						token1
+					],
+					balance: position.liquidityTokenBalance,
+					valueUSD: liquidityValueUSD
+				});
+			});
+
+			return poolBalances.callback(results);
+
+		}
+	}
+};
 
 const tokenBalance = {
-    /*
-    properties: [
-        'balance',
-        'name',
-        'address',
-        'symbol',
-        'logoURI',
-        'priceUsd',
-        'valueUsd'
-    ],
-     */
+	/*
+	properties: [
+		'balance',
+		'name',
+		'address',
+		'symbol',
+		'logoURI',
+		'priceUsd',
+		'valueUsd'
+	],
+	 */
 
-    callback(entry) {
-        return {
-            balance: Number(entry.balance),
-            name: entry.name,
-            address: entry.address,
-            symbol: entry.symbol,
-            logoURI: entry.logoURI,
-            priceUSD: Number(entry.priceUSD),
-            valueUSD: Number(entry.valueUSD)
-        };
-    }
+	callback(entry) {
+		return {
+			balance: Number(entry.balance),
+			name: entry.name,
+			address: entry.address,
+			symbol: entry.symbol,
+			logoURI: entry.logoURI,
+			priceUSD: Number(entry.priceUSD),
+			valueUSD: Number(entry.valueUSD)
+		};
+	}
 };
 
 const tokenBalances = {
 
-    callback(results) {
-        return results.map(entry => tokenBalance.callback(entry));
-    }
+	callback(results) {
+		return results.map(entry => tokenBalance.callback(entry));
+	}
 };
 
 const poolBalances = {
 
-    callback(results) {
-        results.map( entry => {
-            let result = {
-                balance: Number(entry.balance),
-                valueUSD: Number(entry.valueUSD)
-            };
-            result.tokens = entry.tokens.map(token => tokenBalance.callback(token));
-        });
-        return results;
-    }
+	callback(results) {
+		results.map(entry => {
+			let result = {
+				balance: Number(entry.balance),
+				valueUSD: Number(entry.valueUSD)
+			};
+			result.tokens = entry.tokens.map(token => tokenBalance.callback(token));
+		});
+		return results;
+	}
 };

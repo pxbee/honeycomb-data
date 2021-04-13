@@ -9,5 +9,5 @@ type TokenBalances = {
 }
 
 export function tokenBalances({ user_address }: {
-    user_address: number;
+    user_address: string;
 }): Promise<TokenBalances>;

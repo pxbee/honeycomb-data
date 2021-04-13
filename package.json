@@ -10,6 +10,7 @@
 		"prepublish": "npm run pack"
 	},
 	"dependencies": {
+		"@makerdao/multicall": "^0.12.0",
 		"bluebird": "^3.7.2",
 		"commander": "6.1.0",
 		"csv-stringify": "5.3.3",
@@ -20,8 +21,6 @@
 		"isomorphic-ws": "^4.0.1",
 		"node-fetch": "^2.6.1",
 		"subscriptions-transport-ws": "0.9.16",
-		"web3": "^2.0.0-alpha.1",
-		"web3-eth-abi": "^2.0.0-alpha.1",
 		"ws": "7.2.0"
 	},
 	"devDependencies": {
