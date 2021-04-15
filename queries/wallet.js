@@ -29,9 +29,9 @@ module.exports = {
 
 		tokens.forEach(token => {
 			multicallQuery.push({
-				target: token.address,
+				target: token,
 				call: ['balanceOf(address)(uint256)', user_address],
-				returns: [[token.address, val => val / 10 ** token.decimals]],
+				returns: [[token]],
 			});
 		});
 
