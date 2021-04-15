@@ -19,7 +19,12 @@ module.exports = {
 		return data.tokens;
 	},
 
-	async simplyTokenBalances({ user_address = undefined, network = 'xdai', tokens = undefined}) {
+	async simplyTokenBalances({
+		user_address = undefined,
+		network = 'xdai',
+		tokens = undefined,
+		rpc_endpoint = undefined,
+	} = {}) {
 		if (!user_address) {
 			throw new Error('tulip-data: User address undefined');
 		}
@@ -36,7 +41,7 @@ module.exports = {
 		});
 
 		const config = {
-			rpcUrl: rpcEndpoints[network],
+			rpcUrl: rpc_endpoint ? rpc_endpoint : rpcEndpoints[network],
 			multicallAddress: multicallAddresses[network],
 		};
 
