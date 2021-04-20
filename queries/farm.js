@@ -80,6 +80,9 @@ module.exports = {
 		const hsfScaled = Number(hsfInTime / scale) / info.scale;
 		pools.forEach(pool => {
 			pool.hsfInPool = hsfScaled / info.totalAllocPoint * pool.allocPoint;
+			pool.baseApy = 0;
+			pool.rewardApy = 0;
+			pool.totalApy = 0;
 		});
 
 		return pools;
