@@ -1,6 +1,7 @@
 module.exports = {
 	graphAPIEndpoints: {
 		honeyswap_v2: 'https://api.thegraph.com/subgraphs/name/1hive/honeyswap-v2',
+		honeyfarm: 'https://api.thegraph.com/subgraphs/name/pxbee/tulip',
 	},
 
 	tokenLists: {
