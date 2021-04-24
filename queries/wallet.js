@@ -72,11 +72,10 @@ module.exports = {
 
 		await Multicall.aggregate(multicallQuery, config).then(resultObject => {
 			const gqlIds = [];
-
 			Object.entries(resultObject.results.transformed).forEach(([key, value]) => {
 				if (value !== 0) {
-					nonzeroBalances[key] = value;
-					gqlIds.push('\\"' + key + '\\"');
+					nonzeroBalances[key.toLowerCase()] = value;
+					gqlIds.push('\\"' + key.toLowerCase() + '\\"');
 				}
 			});
 
