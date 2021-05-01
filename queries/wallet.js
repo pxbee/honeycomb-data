@@ -310,7 +310,7 @@ module.exports = {
 
 		const properties = [
 			'id',
-			'liquidityPositions { liquidityTokenBalance, pair { token0 { id, symbol, name, derivedETH }, token1 { id, symbol, name, derivedETH }, reserve0, reserve1, reserveUSD, totalSupply} }',
+			'liquidityPositions { liquidityTokenBalance, pair { id, token0 { id, symbol, name, derivedETH }, token1 { id, symbol, name, derivedETH }, reserve0, reserve1, reserveUSD, totalSupply} }',
 		];
 
 		const poolData = await pageResults({
