@@ -132,11 +132,15 @@ module.exports = {
 
 		const hsfInYearUsd = hsfInDayScaled * 365 * xcombPrice;
 
+		//console.log(hsfInYearUsd);
+
 		pools.forEach(pool => {
 			//console.log(pool);
 			const pairInfo = pairsById[pool.pair];
 			//console.log(pairInfo);
 			const poolTotalUSD = pairInfo.reserveUSD / pairInfo.totalSupply * pool.balance;
+			console.log('balance', pool.balance);
+			console.log(poolTotalUSD);
 			//poolTotalUSD
 			//console.log(pairPrice);
 			const poolHsfInYearUSD  = hsfInYearUsd / info.totalAllocPoint * pool.allocPoint;
@@ -166,6 +170,8 @@ const info = {
 		'hsf',
 		'totalHsf',
 		'totalAllocPoint',
+		'timeLockMultiplier',
+		'timeLockConstant',
 		'startDistribution',
 		'distributionSlope',
 		'scale',
@@ -183,6 +189,8 @@ const info = {
 			maxTimeLock: results.maxTimeLock,
 			hsf: results.hsf,
 			totalHsf: results.totalHsf,
+			timeLockMultiplier: results.timeLockMultiplier,
+			timeLockConstant: results.timeLockConstant,
 			startDistribution: results.startDistribution,
 			distributionSlope: results.distributionSlope,
 			scale: results.scale,
