@@ -112,7 +112,7 @@ module.exports = {
 
 		const data = await pairData(liquidityPositions, 'Tulip');
 
-		const xcombPrice = await tokensPrices({tokens: [tokenAddresses.xcomb]}).then(result => result[0].derivedETH);
+		const xcombPrice = 1; // await tokensPrices({tokens: [tokenAddresses.xcomb]}).then(result => result[0].derivedETH);
 
 		const hsfInDay = getHsfInTime(from, from + 3600n * 24n);
 		const hsfScaled = Number(hsfInTime / scale) / info.scale;
