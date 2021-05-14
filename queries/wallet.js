@@ -3,7 +3,15 @@ const fetch = require('node-fetch');
 const pageResults = require('graph-results-pager');
 const { request, gql } = require('graphql-request');
 
-const { multicallAddresses, graphAPIEndpoints, tokenLists, rpcEndpoints, tokenAddresses, mapping, mappingInvert } = require('./../constants');
+const {
+	multicallAddresses,
+	graphAPIEndpoints,
+	tokenLists,
+	rpcEndpoints,
+	tokenAddresses,
+	mapping,
+	mappingInvert,
+} = require('./../constants');
 
 const Multicall = require('@makerdao/multicall');
 
@@ -13,7 +21,7 @@ const tokensById = {};
 module.exports = {
 	//fetches the honeyswap token list
 	async tokens() {
-		if(tokens.length > 0) {
+		if (tokens.length > 0) {
 			return tokens;
 		}
 		const data = await fetch(tokenLists.honeyswap, {
@@ -41,7 +49,7 @@ module.exports = {
 	async pairsPrices({ pairs = undefined } = {}) {
 		const gqlIds = [];
 		pairs.forEach(pair => {
-			if(mapping[pair]) {
+			if (mapping[pair]) {
 				pair = mapping[pair]; //map to xdai pools TODO: remove
 			}
 			gqlIds.push('\\"' + pair.toLowerCase() + '\\"');
@@ -58,7 +66,6 @@ module.exports = {
 			'reserveUSD',
 			'totalSupply',
 		];
-
 		const pairsData = await pageResults({
 			api: graphAPIEndpoints.honeyswap_v2,
 			query: {
@@ -76,12 +83,23 @@ module.exports = {
 			})
 			.catch(err => console.log(err));
 
-		//TODO: remove
+		const tokensById = await module.exports.tokensById();
+
 		pairsData.forEach(pair => {
-			if(mappingInvert[pair.id]) {
+			let i = 0;
+			do {
+				const token = tokensById[pair['token' + i].id.toLowerCase()];
+				let logoURI = null;
+				if (token) {
+					logoURI = token.logoURI;
+				}
+				pair['token' + i].logoURI = logoURI;
+				i++;
+			} while (pair['token' + i] !== undefined);
+			//TODO: remove
+			if (mappingInvert[pair.id]) {
 				pair.id = mappingInvert[pair.id];
 			}
-
 		});
 
 		return pairsData;
@@ -174,14 +192,9 @@ module.exports = {
 
 		//fetch xdai balance
 		multicallQuery.push({
-			call: [
-				'getEthBalance(address)(uint256)',
-				user_address
-			],
+			call: ['getEthBalance(address)(uint256)', user_address],
 			returns: [['xdai', val => val / 10 ** 18]],
 		});
-
-
 
 		const config = {
 			rpcUrl: rpcEndpoints[network],
@@ -252,7 +265,7 @@ module.exports = {
 			valueUSD: nonzeroBalances['xdai'],
 			name: 'xDai',
 			symbol: 'xDai',
-		    logoURI: tokensById['0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d'.toLowerCase()].logoURI //wxdai logo
+			logoURI: tokensById['0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d'.toLowerCase()].logoURI, //wxdai logo
 		});
 
 		return tokenBalances.callback(results);
@@ -393,7 +406,7 @@ module.exports = {
 		const pairIds = [];
 		const liquidityPositions = [];
 		const liquidityPositionsById = {};
-		deposits.forEach( deposit => {
+		deposits.forEach(deposit => {
 			pairIds.push(deposit.pool);
 			const position = {
 				liquidityTokenBalance: deposit.amount,
@@ -404,9 +417,9 @@ module.exports = {
 		});
 
 		//pairIds.push('0x002b85a23023536395d98e6730f5a5fe8115f08b');
-		const pairsPrices = await module.exports.pairsPrices({pairs: pairIds});
+		const pairsPrices = await module.exports.pairsPrices({ pairs: pairIds });
 
-		pairsPrices.forEach( pair => {
+		pairsPrices.forEach(pair => {
 			const position = liquidityPositionsById[pair.id.toLowerCase()];
 			position.pair = pair;
 			liquidityPositions.push(position);
@@ -416,7 +429,6 @@ module.exports = {
 
 		//console.dir(pairData, {depth: null});
 		return poolBalances.callback(pairData);
-
 	},
 };
 
