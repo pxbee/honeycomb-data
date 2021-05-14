@@ -82,18 +82,8 @@ module.exports = {
 		const hsfInTime = getHsfInTime(from, to);
 
 		//get the pool pair addresses and fetch pool data from honeyswap
-
 		poolIds = [];
 		pools.forEach(pool => poolIds.push(pool.pair));
-
-		/*
-		const pairPrices = await pairsPrices({pairs: poolIds});
-		const pairsById = {};
-		pairPrices.forEach( pair => {
-			pairsById[pair.id] = pair;
-		})
-*/
-
 
 		const pairIds = [];
 		const liquidityPositions = [];
@@ -108,7 +98,6 @@ module.exports = {
 			liquidityPositionsById[pool.pair.toLowerCase()] = position;
 		});
 
-		//pairIds.push('0x002b85a23023536395d98e6730f5a5fe8115f08b');
 		const pairPrices = await pairsPrices({pairs: pairIds});
 
 		const pairsById = {};
@@ -129,20 +118,11 @@ module.exports = {
 		const hsfScaled = Number(hsfInTime / scale) / info.scale;
 		const hsfInDayScaled = Number(hsfInDay / scale) / info.scale;
 
-
 		const hsfInYearUsd = hsfInDayScaled * 365 * xcombPrice;
 
-		//console.log(hsfInYearUsd);
-
 		pools.forEach(pool => {
-			//console.log(pool);
 			const pairInfo = pairsById[pool.pair];
-			//console.log(pairInfo);
 			const poolTotalUSD = pairInfo.reserveUSD / pairInfo.totalSupply * pool.balance;
-			console.log('balance', pool.balance);
-			console.log(poolTotalUSD);
-			//poolTotalUSD
-			//console.log(pairPrice);
 			const poolHsfInYearUSD  = hsfInYearUsd / info.totalAllocPoint * pool.allocPoint;
 
 			const rewardApy = poolHsfInYearUSD / poolTotalUSD * 100;
@@ -151,6 +131,7 @@ module.exports = {
 			pool.baseApy = 0;
 			pool.rewardApy = rewardApy;
 			pool.totalApy = 0;
+			pool.pairInfo = pairInfo;
 		});
 
 		return pools;
