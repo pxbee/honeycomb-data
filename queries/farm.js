@@ -1,9 +1,9 @@
 
 const pageResults = require('graph-results-pager');
 
-const { graphAPIEndpoints, pairAddresses, tokenAddresses } = require('./../constants');
+const { graphAPIEndpoints, pairAddresses, tokenAddresses, mapping, mappingInvert } = require('./../constants');
 const { request, gql } = require('graphql-request');
-const { pairsPrices, tokensPrices, pairData } = require('./wallet');
+const { pairsPrices, tokensPrices, pairData, tokensById } = require('./wallet');
 
 module.exports = {
 	async info({ block = undefined, timestamp = undefined } = {}) {
@@ -37,7 +37,7 @@ module.exports = {
 	},
 
 	async deposits({ block = undefined, timestamp = undefined, user_address = undefined } = {}) {
-		return pageResults({
+		const results =  await pageResults({
 			api: graphAPIEndpoints.honeyfarm,
 			query: {
 				entity: 'deposits',
@@ -51,8 +51,24 @@ module.exports = {
 				properties: deposits.properties,
 			},
 		})
-			.then(results => deposits.callback(results))
+			.then(results => {return results})
 			.catch(err => console.log(err));
+
+		const pairs = [];
+		const depositsById = {};
+
+		results.forEach( deposit => {
+			depositsById[deposit.pool.id] = deposit;
+			pairs.push(deposit.pool.id.valueOf());
+		})
+
+		const pairInfo = await pairsPrices({pairs});
+
+		pairInfo.forEach( pair => {
+			depositsById[pair.id.toLowerCase()].pairInfo = pair;
+		})
+
+		return deposits.callback(results)
 	},
 
 	async apys({ block = undefined, timestamp = undefined } = {}) {
@@ -255,6 +271,7 @@ const deposits = {
 				unlockTime,
 				rewardShare,
 				setRewards,
+				pairInfo,
 				referrer,
 				timestamp,
 				block,
@@ -268,6 +285,7 @@ const deposits = {
 				unlockTime: new Date(unlockTime * 1000),
 				rewardShare: Number(rewardShare) / 1e18,
 				setRewards: Number(setRewards),
+				pairInfo: pairInfo,
 				referrer: referrer,
 				addedDate: new Date(timestamp * 1000),
 				addedBlock: Number(block),
