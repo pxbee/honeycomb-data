@@ -1,9 +1,9 @@
 
 const pageResults = require('graph-results-pager');
 
-const { graphAPIEndpoints, pairAddresses, tokenAddresses, mapping, mappingInvert } = require('./../constants');
+const { graphAPIEndpoints } = require('./../constants');
 const { request, gql } = require('graphql-request');
-const { pairsPrices, tokensPrices, pairData, tokensById } = require('./wallet');
+const { pairsPrices, pairData } = require('./wallet');
 
 module.exports = {
 	async info({ block = undefined, timestamp = undefined } = {}) {
@@ -58,14 +58,19 @@ module.exports = {
 		const depositsById = {};
 
 		results.forEach( deposit => {
-			depositsById[deposit.pool.id] = deposit;
+			if(!depositsById[deposit.pool.id]) {
+				depositsById[deposit.pool.id] = [];
+			}
+			depositsById[deposit.pool.id].push( deposit );
 			pairs.push(deposit.pool.id.valueOf());
 		})
 
 		const pairInfo = await pairsPrices({pairs});
 
 		pairInfo.forEach( pair => {
-			depositsById[pair.id.toLowerCase()].pairInfo = pair;
+			depositsById[pair.id.toLowerCase()].forEach( deposit => {
+				deposit.pairInfo = pair;
+			});
 		})
 
 		return deposits.callback(results)
@@ -82,12 +87,6 @@ module.exports = {
 		const from = BigInt(now - startTime);
 		const to = BigInt(endTime - startTime);
 
-		/*
-		console.log('start', startTime);
-		console.log('end', endTime);
-		console.log(info.totalHsf);
-
-		 */
 		const startDistribution = BigInt(info.startDistribution);
 
 		const distributionSlope = BigInt(info.distributionSlope);
