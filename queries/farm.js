@@ -134,19 +134,26 @@ module.exports = {
 		const hsfInDayScaled = Number(hsfInDay / scale) / info.scale;
 
 		const hsfInYearUsd = hsfInDayScaled * 365 * xcombPrice;
+		const hsfInDayUsd = hsfInDayScaled * xcombPrice;
 
 		pools.forEach(pool => {
 			const pairInfo = pairsById[pool.pair];
-			const poolTotalUSD = pairInfo.reserveUSD / pairInfo.totalSupply * pool.balance;
+			// const poolTotalUSD = pairInfo.reserveUSD / pairInfo.totalSupply * pool.balance;
+			//console.log('debug pool balance',pairInfo, pool.balance)
+			const poolTotalUSD = 1 * 1000;
 			const poolHsfInYearUSD  = hsfInYearUsd / info.totalAllocPoint * pool.allocPoint;
+			const poolHsfInDayUSD = hsfInDayUsd / info.totalAllocPoint * pool.allocPoint;
 
 			const rewardApy = poolHsfInYearUSD / poolTotalUSD * 100;
+			const rewardApy24h = poolHsfInDayUSD / poolTotalUSD * 100;
 
 			pool.hsfInPool = hsfScaled / info.totalAllocPoint * pool.allocPoint;
 			pool.baseApy = 0;
 			pool.rewardApy = rewardApy;
 			pool.totalApy = 0;
 			pool.pairInfo = pairInfo;
+			pool.hsf24h = hsfInDayScaled / info.totalAllocPoint * pool.allocPoint;
+			pool.rewardApy24h = rewardApy24h;
 		});
 
 		return pools;
